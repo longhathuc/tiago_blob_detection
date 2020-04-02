@@ -37,22 +37,32 @@ class BlobDetection
         image_transport::Publisher      image_pub;
         image_transport::Publisher      mask_pub;
         // image_transport::Publisher      point_pub;
-              
+
+        //Ros topics names
+        string strImage_sub_topic;
+        string strImage_pub_topic;
+        string strMask_pub_topic;
         
 };
 
 BlobDetection::BlobDetection(ros::NodeHandle nh_): _imageTransport(nh_)
 {
-	    
-    image_sub = _imageTransport.subscribe("/videofile/image_raw", 1, &BlobDetection::imageCB, this,image_transport::TransportHints("compressed"));   
-    ROS_INFO("Subcribed to the topic: /videofile/image_raw \n");
+       
+    //get from params
+    nh_.param<std::string>("strImage_sub_topic", strImage_sub_topic, "/videofile/image_raw");
+    nh_.param<std::string>("strImage_pub_topic", strImage_pub_topic, "/blob_detection/image_blob");
+    nh_.param<std::string>("strMask_pub_topic" , strMask_pub_topic , "/blob_detection/image_mask");
+    
 
-    image_pub = _imageTransport.advertise("/blob_detection/image_blob", 1);
-    ROS_INFO("Published to the topic: /blob_detection/image_blob \n");
+    image_sub = _imageTransport.subscribe(strImage_sub_topic, 1, &BlobDetection::imageCB, this,image_transport::TransportHints("compressed"));   
+    ROS_INFO("Subcribed to the topic: %s", strImage_sub_topic.c_str());
 
-    mask_pub  = _imageTransport.advertise("/blob_detection/image_mask", 1);
-    ROS_INFO("Published to the topic: /blob_detection/image_mask \n");
- 	// cv::namedWindow("Blob Tracking Window", CV_WINDOW_FREERATIO);	
+    image_pub = _imageTransport.advertise(strImage_pub_topic, 1);
+    ROS_INFO("Published to the topic: %s", strImage_pub_topic.c_str());
+
+    mask_pub  = _imageTransport.advertise(strMask_pub_topic, 1);
+    ROS_INFO("Published to the topic: %s",strMask_pub_topic.c_str());
+ 		
 
 }
 
@@ -192,10 +202,7 @@ void BlobDetection::blobDetect(cv::Mat image,
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "blob_detection", ros::init_options::AnonymousName);
-
   ros::NodeHandle nh;
-
   BlobDetection bd(nh);
-
   ros::spin();
 }
