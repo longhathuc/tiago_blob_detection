@@ -83,11 +83,11 @@ void BlobDetection::imageCB(const sensor_msgs::ImageConstPtr& msg)
     cvPtr->image.copyTo(img);
     // ROS_INFO("img cols: %d", img.cols);
 
-    vector<int> hsv_min = {0,  0, 166};
+    vector<int> hsv_min = { 0,  0, 166};
     vector<int> hsv_max = {26, 66, 255};
 
     
-	if ( img.cols > 60 && cvPtr->image.rows > 60)
+	if ( img.cols > 60 && img.rows > 60)
     {
         blobDetect(img, imgMask, keypoints, hsv_min, hsv_max, false, false);
         drawKeypoints(img, keypoints, im_with_keypoints, CV_RGB(255, 0, 0),cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS );
@@ -133,7 +133,7 @@ void BlobDetection::blobDetect(cv::Mat image,
     params.maxThreshold        =  100;
     params.filterByArea        = true;
     params.minArea             =    2;
-    params.maxArea             =  200000;
+    params.maxArea             =20000;
     params.filterByCircularity = true;
     params.minCircularity      = 0.1;
     params.filterByConvexity   = true;
@@ -141,8 +141,15 @@ void BlobDetection::blobDetect(cv::Mat image,
     params.filterByInertia     = true;
     params.minInertiaRatio     = 0.3;
 
-  
-    
+     
+    cv::blur(image,image,cv::Size(5,5));
+    if (bImshow)
+    {
+        cv::imshow("Blur Image",imgMask);
+        cv::waitKey(0);
+    }
+
+
     //convert bgr image to hsv
     cv::Mat hsvImage;
     cvtColor(image, hsvImage, cv::COLOR_BGR2HSV);
@@ -150,10 +157,22 @@ void BlobDetection::blobDetect(cv::Mat image,
     //Hsv threshold
     cv::inRange(hsvImage, hsv_min, hsv_max, imgMask);
 
-    //todo: erode & dilate
+    //Dilate & Erore
+    cv::dilate(imgMask, imgMask, cv::Mat(), cv::Point(-1, -1), 2);
+    if (bImshow)
+    {
+        cv::imshow("Dilate Mask",imgMask);
+        cv::waitKey(0);
+    }
 
-    
-    
+
+    cv::erode(imgMask, imgMask, cv::Mat(), cv::Point(-1, -1), 2);
+    if (bImshow)
+    {
+        cv::imshow("Erpde Mask",imgMask);
+        cv::waitKey(0);
+    }
+
     cv::Mat im_with_keypoints;
     cv::Ptr<cv::SimpleBlobDetector> detector = cv::SimpleBlobDetector::create(params);   
 
