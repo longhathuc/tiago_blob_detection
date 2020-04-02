@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+
+    <param name="strImage_sub_topic"  value="/videofile/image_raw" />
+    <param name="strImage_pub_topic"  value="/blob_detection/image_blob"/>
+    <param name="strMask_pub_topic"   value="/blob_detection/image_mask" />
+
+    <node name="blob_detection" pkg="tiago_blob_detection" type="blob_detection" output ="screen"/>
+</launch>
