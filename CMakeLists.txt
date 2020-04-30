@@ -14,6 +14,9 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   std_msgs
   geometry_msgs
+  visp_bridge
+  tf2_ros
+  tf2_geometry_msgs
 )
 
 find_package(OpenCV COMPONENTS opencv_highgui opencv_features2d opencv_xfeatures2d opencv_calib3d)
@@ -21,6 +24,9 @@ if(NOT OPENCV_FOUND)
 	find_package(OpenCV REQUIRED COMPONENTS opencv_highgui opencv_features2d opencv_calib3d)
 	add_definitions(-DNO_CV_XFEATURES2D)
 endif()
+
+
+
 #list(APPEND OpenCV_LIBRARIES opencv_nonfree)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 
@@ -39,4 +45,15 @@ include_directories(
 
 add_executable(blob_detection src/blob_detection.cpp)
 target_link_libraries(blob_detection ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+
+# install
+install (TARGETS blob_detection
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+install(DIRECTORY launch
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+  USE_SOURCE_PERMISSIONS)
 

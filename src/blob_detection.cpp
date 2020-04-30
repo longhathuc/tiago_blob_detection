@@ -3,6 +3,9 @@
 #include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/Image.h>
 #include <image_transport/image_transport.h>
+#include <visp3/core/vpXmlParser.h>
+#include <visp3/detection/vpDetectorAprilTag.h>
+#include <visp3/mbt/vpMbGenericTracker.h>
 
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -42,6 +45,8 @@ class BlobDetection
         string strImage_sub_topic;
         string strImage_pub_topic;
         string strMask_pub_topic;
+        string strAgimusFrame_sub_topic;
+
         
 };
 
@@ -49,10 +54,12 @@ BlobDetection::BlobDetection(ros::NodeHandle nh_): _imageTransport(nh_)
 {
        
     //get from params
-    nh_.param<std::string>("strImage_sub_topic", strImage_sub_topic, "/videofile/image_raw");
+    nh_.param<std::string>("strImage_sub_topic", strImage_sub_topic, "/rgb/image");
     nh_.param<std::string>("strImage_pub_topic", strImage_pub_topic, "/blob_detection/image_blob");
     nh_.param<std::string>("strMask_pub_topic" , strMask_pub_topic , "/blob_detection/image_mask");
     
+    //Subcribe the tags topic from agimus-vision
+    nh_.param<std::string>("strAgimusFrame_sub_topic" , strMask_pub_topic , "/agimus/vision/tags");
 
     image_sub = _imageTransport.subscribe(strImage_sub_topic, 1, &BlobDetection::imageCB, this,image_transport::TransportHints("compressed"));   
     ROS_INFO("Subcribed to the topic: %s", strImage_sub_topic.c_str());
@@ -63,7 +70,6 @@ BlobDetection::BlobDetection(ros::NodeHandle nh_): _imageTransport(nh_)
     mask_pub  = _imageTransport.advertise(strMask_pub_topic, 1);
     ROS_INFO("Published to the topic: %s",strMask_pub_topic.c_str());
  		
-
 }
 
 BlobDetection::~BlobDetection()
@@ -93,8 +99,8 @@ void BlobDetection::imageCB(const sensor_msgs::ImageConstPtr& msg)
     cvPtr->image.copyTo(img);
     // ROS_INFO("img cols: %d", img.cols);
 
-    vector<int> hsv_min = { 0,  0, 166};
-    vector<int> hsv_max = {26, 66, 255};
+    vector<int> hsv_min = { 0,  0, 0};
+    vector<int> hsv_max = {255, 255, 59};
 
     
 	if ( img.cols > 60 && img.rows > 60)
@@ -167,7 +173,7 @@ void BlobDetection::blobDetect(cv::Mat image,
     //Hsv threshold
     cv::inRange(hsvImage, hsv_min, hsv_max, imgMask);
 
-    //Dilate & Erore
+    //Dilate & Eroreros::init(argc, argv, "video_stream");
     cv::dilate(imgMask, imgMask, cv::Mat(), cv::Point(-1, -1), 2);
     if (bImshow)
     {
@@ -196,12 +202,27 @@ void BlobDetection::blobDetect(cv::Mat image,
     detector->detect(imgMaskReserved, keypoints);    
     imgMask = imgMaskReserved;
 
+    vector<cv::KeyPoint>::const_iterator it = keypoints.begin(),
+                                     end = keypoints.end();
+
+
+    //Check coordinates of keypoints
+    ROS_DEBUG("Keypoints:");
+    int iIt = 0;                        
+    for( ; it != end; ++it )
+    {
+        ROS_DEBUG("Keypoint %d: %4.2f,%4.2f", iIt, (*it).pt.x, (*it).pt.y);
+        iIt++;
+    } 
+    
+
     
 }
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "blob_detection", ros::init_options::AnonymousName);
+  ros::init(argc, argv, "blob_detection");
+  
   ros::NodeHandle nh;
   BlobDetection bd(nh);
   ros::spin();
