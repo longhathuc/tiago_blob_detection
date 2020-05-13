@@ -5,6 +5,13 @@
     <param name="strImage_pub_topic"        value="/blob_detection/image_blob"/>
     <param name="strMask_pub_topic"         value="/blob_detection/image_mask" />
     <param name="strAgimusFrame_sub_topic"  value="/agimus/vision/tags" />
+    <param name="strCameraInfo_sub_topic"   value="/rgb/camera_info" />
 
+    <param name="iHSV_min_H" value = "0"/>
+    <param name="iHSV_min_S" value = "0"/>
+    <param name="iHSV_min_V" value = "0"/>
+    <param name="iHSV_max_H" value = "255"/>
+    <param name="iHSV_max_S" value = "255"/>
+    <param name="iHSV_max_V" value = "25"/>
     <node name="blob_detection" pkg="tiago_blob_detection" type="blob_detection" output ="screen"/>
 </launch>
