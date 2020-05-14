@@ -49,11 +49,11 @@ class BlobDetection
                         bool        bImshow = false);
 
         ros::NodeHandle nh_;    
-        image_transport::ImageTransport _imageTransport;
-        image_transport::CameraSubscriber     image_sub;
-        image_transport::Publisher      image_pub;
-        image_transport::Publisher      mask_pub;
-        geometry_msgs::TransformStamped  transformStamped;
+        image_transport::ImageTransport    _imageTransport;
+        image_transport::CameraSubscriber  image_sub;
+        image_transport::Publisher         image_pub;
+        image_transport::Publisher         mask_pub;
+        geometry_msgs::TransformStamped    transformStamped;
         image_geometry::PinholeCameraModel cam_model;
 
         //Ros topics names
@@ -206,8 +206,8 @@ void BlobDetection::blobDetect(cv::Mat image,
     params.filterByInertia     = true;
     params.minInertiaRatio     = 0.3;
 
-    cout << "intrinsic matrix:" << endl;
-    cout << cameraMatrix << endl;
+    // cout << "intrinsic matrix:" << endl;
+    // cout << cameraMatrix << endl;
 
      
     cv::blur(image,image,cv::Size(5,5));
@@ -263,7 +263,7 @@ void BlobDetection::blobDetect(cv::Mat image,
     int iIt = 0;                        
     for( ; it != end; ++it )
     {
-        ROS_INFO("Keypoint %d: %4.2f,%4.2f", iIt, (*it).pt.x, (*it).pt.y);
+        ROS_DEBUG("Keypoint %d: %4.2f,%4.2f", iIt, (*it).pt.x, (*it).pt.y);
         iIt++;
     } 
 
@@ -271,7 +271,7 @@ void BlobDetection::blobDetect(cv::Mat image,
     ros::Rate rate(10.0);
     tf2_ros::Buffer tfBuffer;
     tf2_ros::TransformListener tfListener(tfBuffer);
-    while (nh_.ok()){
+
         try
         {
             transformStamped = tfBuffer.lookupTransform("xtion_optical_frame","skin/tag36_11_00020_tf",ros::Time(0));
@@ -293,6 +293,7 @@ void BlobDetection::blobDetect(cv::Mat image,
 
                 transformStamped_hole.header.stamp = ros::Time::now();
                 transformStamped_hole.child_frame_id = "hole_" + to_string(i) + "_tf";
+                // transformStamped_hole.child_frame_id = "skin/hole_link_measured";
                 transformStamped_hole.header.frame_id = "xtion_optical_frame";
 
                 transformStamped_hole.transform.translation.x = world_cord(0,0);
@@ -312,7 +313,7 @@ void BlobDetection::blobDetect(cv::Mat image,
             ros::Duration(1.0).sleep();
             //  continue;
         }
-    }
+
 }
 
 int main(int argc, char** argv)
