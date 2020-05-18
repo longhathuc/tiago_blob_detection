@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(tiago_blob_detection)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+add_compile_options(-std=c++11)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
   visp_bridge
   tf2_ros
   tf2_geometry_msgs
+  tf
 )
 
 find_package(OpenCV COMPONENTS opencv_highgui opencv_features2d opencv_xfeatures2d opencv_calib3d)

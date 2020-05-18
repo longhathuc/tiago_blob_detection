@@ -6,6 +6,7 @@
     <param name="strMask_pub_topic"         value="/blob_detection/image_mask" />
     <param name="strAgimusFrame_sub_topic"  value="/agimus/vision/tags" />
     <param name="strCameraInfo_sub_topic"   value="/rgb/camera_info" />
+    <param name="strTransform_sub_topic"    value="/agimus/vision/tags" />
 
     <param name="iHSV_min_H" value = "0"/>
     <param name="iHSV_min_S" value = "0"/>

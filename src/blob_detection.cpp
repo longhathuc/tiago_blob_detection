@@ -25,8 +25,9 @@
 #include <stdlib.h>
 #include <vector> 
 #include <string>
-
-
+#include "tf/transform_listener.h"
+#include "tf/message_filter.h"
+#include "message_filters/subscriber.h"
 
 using namespace std;
 using namespace sensor_msgs;
@@ -36,10 +37,11 @@ class BlobDetection
     public:
 	    BlobDetection(ros::NodeHandle nh_);
 	    ~BlobDetection();
-    
+       
     protected:
         
         void imageCB(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::CameraInfoConstPtr& cam_info);
+        void transformCB(const geometry_msgs::TransformStamped &tfMsg);
         void blobDetect(cv::Mat     image, 
                         cv::Mat     &imgMask, 
                         std::vector<cv::KeyPoint> &keypoints,           
@@ -47,14 +49,20 @@ class BlobDetection
                         vector<int> fHsvMax,
                         bool        bBlur = false,
                         bool        bImshow = false);
+        void publishHoleTF(std::vector<cv::KeyPoint> &keypoints);
 
         ros::NodeHandle nh_;    
+        
         image_transport::ImageTransport    _imageTransport;
         image_transport::CameraSubscriber  image_sub;
         image_transport::Publisher         image_pub;
         image_transport::Publisher         mask_pub;
         geometry_msgs::TransformStamped    transformStamped;
         image_geometry::PinholeCameraModel cam_model;
+       
+        tf::TransformListener tf_;
+        ros::Subscriber transform_sub;
+        string target_frame_;
 
         //Ros topics names
         string strImage_sub_topic;
@@ -62,10 +70,14 @@ class BlobDetection
         string strMask_pub_topic;
         string strAgimusFrame_sub_topic;
         string strCameraInfo_sub_topic;
-
-
+        string strTransform_sub_topic;
+       
+    
         //intrinsic matrix
+        std::vector<cv::KeyPoint> keypoints;
         cv::Matx33d cameraMatrix;
+        
+        
 
         int iHSV_min_H;
         int iHSV_min_S;
@@ -77,16 +89,15 @@ class BlobDetection
 };
 
 BlobDetection::BlobDetection(ros::NodeHandle nh_): _imageTransport(nh_)
-{
-       
+{       
     //get from params
     nh_.param<std::string>("strImage_sub_topic", strImage_sub_topic, "/rgb/image");
     nh_.param<std::string>("strImage_pub_topic", strImage_pub_topic, "/blob_detection/image_blob");
     nh_.param<std::string>("strMask_pub_topic" , strMask_pub_topic , "/blob_detection/image_mask");
     nh_.param<std::string>("strCameraInfo_sub_topic", strCameraInfo_sub_topic, "/rgb/camera_info");
-    
+    nh_.param<std::string>("strTransform_sub_topic", strTransform_sub_topic, "/agimus/vision/tags");
     //Subcribe the tags topic from agimus-vision
-    nh_.param<std::string>("strAgimusFrame_sub_topic" , strAgimusFrame_sub_topic , "/agimus/vision/tags");
+    // nh_.param<std::string>("strAgimusFrame_sub_topic" , strAgimusFrame_sub_topic , "/agimus/vision/tags");
 
     //get HSV RGB params
     // nh_.getParam("iHSV_min_H", iHSV_min_H, 0);
@@ -99,21 +110,22 @@ BlobDetection::BlobDetection(ros::NodeHandle nh_): _imageTransport(nh_)
     nh_.param<int>("iHSV_max_V", iHSV_max_V, 0);
     
 
-    image_sub = _imageTransport.subscribeCamera(strImage_sub_topic, 1, &BlobDetection::imageCB, this);   
-    // image_sub.subscribe(nh_, strImage_sub_topic, 1);
+    image_sub = _imageTransport.subscribeCamera(strImage_sub_topic, 10, &BlobDetection::imageCB, this);   
     ROS_INFO("Subcribed to the topic: %s", strImage_sub_topic.c_str());
 
-    image_pub = _imageTransport.advertise(strImage_pub_topic, 1);
+    image_pub = _imageTransport.advertise(strImage_pub_topic, 10);
     ROS_INFO("Published to the topic: %s", strImage_pub_topic.c_str());
 
-    mask_pub  = _imageTransport.advertise(strMask_pub_topic, 1);
+    mask_pub  = _imageTransport.advertise(strMask_pub_topic, 10);
     ROS_INFO("Published to the topic: %s",strMask_pub_topic.c_str());
 
-    
+
+    transform_sub = nh_.subscribe(strTransform_sub_topic, 10, &BlobDetection::transformCB, this);
+    ROS_INFO("Subcribed to the topic: %s", strTransform_sub_topic.c_str());
+
     ROS_INFO("HSV Min:%d %d %d",iHSV_min_H,iHSV_min_S,iHSV_min_V);
     ROS_INFO("HSV Max:%d %d %d",iHSV_max_H,iHSV_max_S,iHSV_max_V);
 
- 		
 }
 
 BlobDetection::~BlobDetection()
@@ -121,12 +133,51 @@ BlobDetection::~BlobDetection()
 	cv::destroyAllWindows();
 }
 
+void BlobDetection::transformCB(const geometry_msgs::TransformStamped &transformStamped)
+{   
+    ROS_DEBUG("Enter transformCB");
+
+    ROS_DEBUG("parent_name: %s",(transformStamped.header.frame_id).c_str());
+    ROS_DEBUG("translation.x:%6.4f", transformStamped.transform.translation.x);
+    ROS_DEBUG("translation.y:%6.4f", transformStamped.transform.translation.y);
+    ROS_DEBUG("translation.z:%6.4f", transformStamped.transform.translation.z);
+
+
+    static tf2_ros::TransformBroadcaster tf_broadcaster;
+
+    for (int i = 0; i < keypoints.size(); i++)
+    {
+
+        geometry_msgs::TransformStamped transformStamped_hole;
+        cv::Matx31d world_cord(keypoints[i].pt.x, keypoints[i].pt.y, 1);
+
+        world_cord = cameraMatrix.inv() * world_cord;
+        world_cord *= transformStamped.transform.translation.z;
+
+        transformStamped_hole.header.stamp = ros::Time::now();
+        transformStamped_hole.child_frame_id = "skin/hole_" + to_string(i) + "_link";
+        transformStamped_hole.header.frame_id = "xtion_optical_frame";
+
+        transformStamped_hole.transform.translation.x = world_cord(0, 0);
+        transformStamped_hole.transform.translation.y = world_cord(1, 0);
+        transformStamped_hole.transform.translation.z = world_cord(2, 0);
+
+        transformStamped_hole.transform.rotation.x = transformStamped.transform.rotation.x;
+        transformStamped_hole.transform.rotation.y = transformStamped.transform.rotation.y;
+        transformStamped_hole.transform.rotation.z = transformStamped.transform.rotation.z;
+        transformStamped_hole.transform.rotation.w = transformStamped.transform.rotation.w;
+
+        tf_broadcaster.sendTransform(transformStamped_hole);
+    }
+    ROS_DEBUG("Exit transformCB");
+
+}
 void BlobDetection::imageCB(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::CameraInfoConstPtr& cam_info)
 {
     
     cv::Mat img, img_gray, imgMask, im_with_keypoints;
 	cv_bridge::CvImagePtr cvPtr;
-    std::vector<cv::KeyPoint> keypoints;
+    // std::vector<cv::KeyPoint> keypoints;
  	
     try
 	{
@@ -148,9 +199,6 @@ void BlobDetection::imageCB(const sensor_msgs::ImageConstPtr& msg, const sensor_
 
     vector<int> hsv_min = {iHSV_min_H,  iHSV_min_S, iHSV_min_V};
     vector<int> hsv_max = {iHSV_max_H,  iHSV_max_S, iHSV_max_V};
-
-
-    
     
 	if ( img.cols > 60 && img.rows > 60)
     {
@@ -180,7 +228,8 @@ void BlobDetection::imageCB(const sensor_msgs::ImageConstPtr& msg, const sensor_
         ROS_ERROR("cv_bridge exception: %s", e.what());
         return;
     }
-    
+
+   
 }
     
 //outout :: imgMask, keypoints
@@ -241,7 +290,7 @@ void BlobDetection::blobDetect(cv::Mat image,
         cv::waitKey(0);
     }
 
-    cv::Mat im_with_keypoints;
+    // cv::Mat im_with_keypoints;
     cv::Ptr<cv::SimpleBlobDetector> detector = cv::SimpleBlobDetector::create(params);   
 
     cv::Mat imgMaskReserved;
@@ -266,60 +315,11 @@ void BlobDetection::blobDetect(cv::Mat image,
         ROS_DEBUG("Keypoint %d: %4.2f,%4.2f", iIt, (*it).pt.x, (*it).pt.y);
         iIt++;
     } 
-
-    // //look up the transform
-    ros::Rate rate(10.0);
-    tf2_ros::Buffer tfBuffer;
-    tf2_ros::TransformListener tfListener(tfBuffer);
-
-        try
-        {
-            transformStamped = tfBuffer.lookupTransform("xtion_optical_frame","skin/tag36_11_00020_tf",ros::Time(0));
-            ROS_DEBUG("parent_name: %s",(transformStamped.header.frame_id).c_str());
-            ROS_DEBUG("transformStamped.transform.translation.x:%6.4f", transformStamped.transform.translation.x);
-            ROS_DEBUG("transformStamped.transform.translation.x:%6.4f", transformStamped.transform.translation.y);
-            ROS_DEBUG("transformStamped.transform.translation.x:%6.4f", transformStamped.transform.translation.z);
-           
-            static tf2_ros::TransformBroadcaster tf_broadcaster;
-            
-            for (int i = 0; i < keypoints.size(); i++)
-            {
- 
-                geometry_msgs::TransformStamped transformStamped_hole;
-                cv::Matx31d world_cord(keypoints[i].pt.x,keypoints[i].pt.y,1); 
-                
-                world_cord =  cameraMatrix.inv() * world_cord;
-                world_cord *= transformStamped.transform.translation.z;
-
-                transformStamped_hole.header.stamp = ros::Time::now();
-                transformStamped_hole.child_frame_id = "hole_" + to_string(i) + "_tf";
-                // transformStamped_hole.child_frame_id = "skin/hole_link_measured";
-                transformStamped_hole.header.frame_id = "xtion_optical_frame";
-
-                transformStamped_hole.transform.translation.x = world_cord(0,0);
-                transformStamped_hole.transform.translation.y = world_cord(1,0);
-                transformStamped_hole.transform.translation.z = world_cord(2,0);
-
-                transformStamped_hole.transform.rotation.x = transformStamped.transform.rotation.x;
-                transformStamped_hole.transform.rotation.y = transformStamped.transform.rotation.y;
-                transformStamped_hole.transform.rotation.z = transformStamped.transform.rotation.z;
-                transformStamped_hole.transform.rotation.w = transformStamped.transform.rotation.w;
-
-                tf_broadcaster.sendTransform(transformStamped_hole);
-            }
-        }
-        catch (tf2::TransformException &ex) {
-            ROS_WARN("%s",ex.what());
-            ros::Duration(1.0).sleep();
-            //  continue;
-        }
-
 }
 
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "blob_detection");
-  
   ros::NodeHandle nh;
   BlobDetection bd(nh);
   ros::spin();
