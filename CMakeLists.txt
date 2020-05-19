@@ -15,10 +15,10 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   geometry_msgs
   image_geometry
-  visp_bridge
   tf2_ros
   tf2_geometry_msgs
   tf
+  urdf
 )
 
 find_package(OpenCV COMPONENTS opencv_highgui opencv_features2d opencv_xfeatures2d opencv_calib3d)

@@ -10,16 +10,9 @@
 #include <image_geometry/stereo_camera_model.h>
 #include <image_geometry/pinhole_camera_model.h>
 #include <image_transport/camera_subscriber.h>
-#include <visp3/core/vpXmlParser.h>
-#include <visp3/core/vpTracker.h>
-#include <visp3/detection/vpDetectorAprilTag.h>
-#include <visp3/mbt/vpMbGenericTracker.h>
-#include <visp3/core/vpHomogeneousMatrix.h>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/opencv.hpp>
-#include <visp3/core/vpTranslationVector.h>
-#include <visp3/core/vpQuaternionVector.h>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,7 +21,9 @@
 #include "tf/transform_listener.h"
 #include "tf/message_filter.h"
 #include "message_filters/subscriber.h"
-
+#include <tf2_ros/static_transform_broadcaster.h>
+#include <urdf/model.h>
+#include <opencv2/features2d.hpp>
 using namespace std;
 using namespace sensor_msgs;
 
@@ -77,55 +72,84 @@ class BlobDetection
         std::vector<cv::KeyPoint> keypoints;
         cv::Matx33d cameraMatrix;
         
-        
 
+        //Parameters for HSV mask filter
         int iHSV_min_H;
         int iHSV_min_S;
         int iHSV_min_V;
         int iHSV_max_H;
         int iHSV_max_S;
         int iHSV_max_V;
-        
+
+        //Parameters for blob properties
+        float  fMinThreshold;
+        float  fMaxThreshold;
+        bool   bFilterByArea;
+        float  fMinArea;
+        float  fMaxArea;
+        bool   bFilterByCircularity;
+        float  fMinCircularity;
+        float  fMaxCircularity;
+        bool   bFilterByConvexity;
+        float  fMinConvexity;
+        float  fMaxConvexity;
+        bool   bFilterByInertia;
+        float  fMinInertiaRatio;
+        float  fMaxInertiaRatio;
+
+
 };
 
 BlobDetection::BlobDetection(ros::NodeHandle nh_): _imageTransport(nh_)
 {       
-    //get from params
+    //Parameters for topics 
     nh_.param<std::string>("strImage_sub_topic", strImage_sub_topic, "/rgb/image");
     nh_.param<std::string>("strImage_pub_topic", strImage_pub_topic, "/blob_detection/image_blob");
     nh_.param<std::string>("strMask_pub_topic" , strMask_pub_topic , "/blob_detection/image_mask");
     nh_.param<std::string>("strCameraInfo_sub_topic", strCameraInfo_sub_topic, "/rgb/camera_info");
     nh_.param<std::string>("strTransform_sub_topic", strTransform_sub_topic, "/agimus/vision/tags");
-    //Subcribe the tags topic from agimus-vision
-    // nh_.param<std::string>("strAgimusFrame_sub_topic" , strAgimusFrame_sub_topic , "/agimus/vision/tags");
+  
 
-    //get HSV RGB params
-    // nh_.getParam("iHSV_min_H", iHSV_min_H, 0);
-
+    //Parameters for HSV mask filter
     nh_.param<int>("iHSV_min_H", iHSV_min_H, 0);
     nh_.param<int>("iHSV_min_S", iHSV_min_S, 0);
     nh_.param<int>("iHSV_min_V", iHSV_min_V, 0);
     nh_.param<int>("iHSV_max_H", iHSV_max_H, 0);
     nh_.param<int>("iHSV_max_S", iHSV_max_S, 0);
     nh_.param<int>("iHSV_max_V", iHSV_max_V, 0);
+    ROS_INFO("HSV Min:%d %d %d",iHSV_min_H,iHSV_min_S,iHSV_min_V);
+    ROS_INFO("HSV Max:%d %d %d",iHSV_max_H,iHSV_max_S,iHSV_max_V);
     
 
+    // Parameters for blob properties
+    nh_.param<float>("fMinThreshold",        fMinThreshold,       0.0);
+    nh_.param<float>("fMaxThreshold",        fMaxThreshold,       100.0);
+    nh_.param<bool> ("bFilterByArea",        bFilterByArea,       true);
+    nh_.param<float>("fMinArea",             fMinArea,            2.0);
+    nh_.param<float>("fMaxArea",             fMaxArea,            2000.0);
+    nh_.param<bool> ("bFilterByCircularity", bFilterByCircularity,true);
+    nh_.param<float>("fMinCircularity",      fMinCircularity,     0.8);
+    nh_.param<float>("fMaxCircularity",      fMaxCircularity,     1.0);
+    nh_.param<bool> ("bFilterByConvexity",   bFilterByConvexity,  true);
+    nh_.param<float>("fMinConvexity",        fMinConvexity,       0.2);
+    nh_.param<float>("fMaxConvexity",        fMaxConvexity,       0.2);
+    nh_.param<bool> ("bFilterByInertia",     bFilterByInertia,    true);
+    nh_.param<float>("fMinInertiaRatio",    fMinInertiaRatio,   0.3);
+    nh_.param<float>("fMaxInertiaRatio",    fMaxInertiaRatio,   1.0);
+
+
+    //publisher & subcriber 
     image_sub = _imageTransport.subscribeCamera(strImage_sub_topic, 10, &BlobDetection::imageCB, this);   
     ROS_INFO("Subcribed to the topic: %s", strImage_sub_topic.c_str());
 
-    image_pub = _imageTransport.advertise(strImage_pub_topic, 10);
+    image_pub = _imageTransport.advertise(strImage_pub_topic, 100);
     ROS_INFO("Published to the topic: %s", strImage_pub_topic.c_str());
 
-    mask_pub  = _imageTransport.advertise(strMask_pub_topic, 10);
+    mask_pub  = _imageTransport.advertise(strMask_pub_topic, 100);
     ROS_INFO("Published to the topic: %s",strMask_pub_topic.c_str());
 
-
-    transform_sub = nh_.subscribe(strTransform_sub_topic, 10, &BlobDetection::transformCB, this);
+    transform_sub = nh_.subscribe(strTransform_sub_topic, 100, &BlobDetection::transformCB, this);
     ROS_INFO("Subcribed to the topic: %s", strTransform_sub_topic.c_str());
-
-    ROS_INFO("HSV Min:%d %d %d",iHSV_min_H,iHSV_min_S,iHSV_min_V);
-    ROS_INFO("HSV Max:%d %d %d",iHSV_max_H,iHSV_max_S,iHSV_max_V);
-
 }
 
 BlobDetection::~BlobDetection()
@@ -141,11 +165,10 @@ void BlobDetection::transformCB(const geometry_msgs::TransformStamped &transform
     ROS_DEBUG("translation.x:%6.4f", transformStamped.transform.translation.x);
     ROS_DEBUG("translation.y:%6.4f", transformStamped.transform.translation.y);
     ROS_DEBUG("translation.z:%6.4f", transformStamped.transform.translation.z);
-
+    std::string urdf_file = "/home/tlha/catkin_ws/install/share/agimus_demos/urdf/aircraft_skin_with_marker.urdf";
 
     static tf2_ros::TransformBroadcaster tf_broadcaster;
-
-    for (int i = 0; i < keypoints.size(); i++)
+    for (int i = 0; i < 2; i++)
     {
 
         geometry_msgs::TransformStamped transformStamped_hole;
@@ -241,31 +264,32 @@ void BlobDetection::blobDetect(cv::Mat image,
                         bool  bBlur,
                         bool  bImshow)
 {
-
     cv::SimpleBlobDetector::Params  params;
-    params.minThreshold        =    0;
-    params.maxThreshold        =  100;
-    params.filterByArea        = true;
-    params.minArea             =    2;
-    params.maxArea             =20000;
-    params.filterByCircularity = true;
-    params.minCircularity      = 0.1;
-    params.filterByConvexity   = true;
-    params.minConvexity        = 0.2;
-    params.filterByInertia     = true;
-    params.minInertiaRatio     = 0.3;
+
+    params.minThreshold        = fMinThreshold;
+    params.maxThreshold        = fMaxThreshold;
+    params.filterByArea        = bFilterByArea;
+    params.minArea             = fMinArea;
+    params.maxArea             = fMaxArea;
+    params.filterByCircularity = bFilterByCircularity;
+    params.minCircularity      = fMinCircularity;
+    params.maxCircularity      = fMaxCircularity;
+    params.filterByConvexity   = bFilterByConvexity;
+    params.minConvexity        = fMinConvexity;
+    params.maxConvexity        = fMaxConvexity;
+    params.filterByInertia     = bFilterByInertia;
+    params.minInertiaRatio     = fMinInertiaRatio;
+    params.maxInertiaRatio     = fMaxInertiaRatio;
 
     // cout << "intrinsic matrix:" << endl;
     // cout << cameraMatrix << endl;
 
-     
     cv::blur(image,image,cv::Size(5,5));
     if (bImshow)
     {
         cv::imshow("Blur Image",imgMask);
         cv::waitKey(0);
     }
-
 
     //convert bgr image to hsv
     cv::Mat hsvImage;
@@ -281,7 +305,6 @@ void BlobDetection::blobDetect(cv::Mat image,
         cv::imshow("Dilate Mask",imgMask);
         cv::waitKey(0);
     }
-
 
     cv::erode(imgMask, imgMask, cv::Mat(), cv::Point(-1, -1), 2);
     if (bImshow)
