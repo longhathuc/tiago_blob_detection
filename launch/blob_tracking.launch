@@ -22,9 +22,9 @@
     <param name="fMaxThreshold"         value = "100.0"/>
     <param name="bFilterByArea"         value = "true"/>
     <param name="fMinArea"              value = "2.0"/>
-    <param name="fMaxArea"              value = "2000.0"/>
+    <param name="fMaxArea"              value = "300.0"/>
     <param name="bFilterByCircularity"  value = "true"/>
-    <param name="fMinCircularity"       value = "0.89"/>
+    <param name="fMinCircularity"       value = "0.8"/>
     <param name="fMaxCircularity"       value = "1.0"/>
     <param name="bFilterByConvexity"    value = "true"/>
     <param name="fMinConvexity"         value = "0.2"/>
