@@ -19,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_geometry_msgs
   tf
   urdf
+  camera_info_manager
 )
 
 find_package(OpenCV COMPONENTS opencv_highgui opencv_features2d opencv_xfeatures2d opencv_calib3d)
@@ -55,7 +56,7 @@ install (TARGETS blob_detection
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-install(DIRECTORY launch
+install(DIRECTORY launch cfg
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
   USE_SOURCE_PERMISSIONS)
 

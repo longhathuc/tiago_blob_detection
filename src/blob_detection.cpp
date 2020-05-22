@@ -24,6 +24,8 @@
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <urdf/model.h>
 #include <opencv2/features2d.hpp>
+#include <camera_info_manager/camera_info_manager.h>
+
 using namespace std;
 using namespace sensor_msgs;
 
@@ -34,8 +36,8 @@ class BlobDetection
 	    ~BlobDetection();
        
     protected:
-        
-        void imageCB(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::CameraInfoConstPtr& cam_info);
+        void imageCB(const sensor_msgs::ImageConstPtr& msg);
+        // void imageCB(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::CameraInfoConstPtr& cam_info);
         void transformCB(const geometry_msgs::TransformStamped &tfMsg);
         void blobDetect(cv::Mat     image, 
                         cv::Mat     &imgMask, 
@@ -49,7 +51,8 @@ class BlobDetection
         ros::NodeHandle nh_;    
         
         image_transport::ImageTransport    _imageTransport;
-        image_transport::CameraSubscriber  image_sub;
+        // image_transport::CameraSubscriber  image_sub;
+         image_transport::Subscriber  image_sub;
         image_transport::Publisher         image_pub;
         image_transport::Publisher         mask_pub;
         geometry_msgs::TransformStamped    transformStamped;
@@ -97,10 +100,16 @@ class BlobDetection
         float  fMinInertiaRatio;
         float  fMaxInertiaRatio;
 
+        //Parameters for camera info
+        boost::shared_ptr<camera_info_manager::CameraInfoManager> cinfo_;
+        // const sensor_msgs::CameraInfo cam_info;
+        string strCameraModel;
+        bool   bSimulation;
+
 
 };
 
-BlobDetection::BlobDetection(ros::NodeHandle nh_): _imageTransport(nh_)
+BlobDetection::BlobDetection(ros::NodeHandle nh_): _imageTransport(nh_), cinfo_(new camera_info_manager::CameraInfoManager(nh_))
 {       
     //Parameters for topics 
     nh_.param<std::string>("strImage_sub_topic", strImage_sub_topic, "/rgb/image");
@@ -138,18 +147,36 @@ BlobDetection::BlobDetection(ros::NodeHandle nh_): _imageTransport(nh_)
     nh_.param<float>("fMaxInertiaRatio",    fMaxInertiaRatio,   1.0);
 
 
+     //Parameters for camera info'
+    nh_.param<bool> ("bSimulation",         bSimulation,   false);
+    nh_.param<std::string>("strCameraModel", strCameraModel, "");
+    ROS_INFO("CamInfo Link: %s",strCameraModel.c_str());
+
+    if (cinfo_->validateURL(strCameraModel))
+    {
+        cinfo_->loadCameraInfo(strCameraModel);
+        ROS_INFO("Got camera info & loaded!");
+        cout <<  cinfo_->getCameraInfo();
+    }
+    else
+        ROS_INFO("Recheck URL, stupid!!!!!!!");
+   
+
+
     //publisher & subcriber 
-    image_sub = _imageTransport.subscribeCamera(strImage_sub_topic, 10, &BlobDetection::imageCB, this);   
+    image_transport::TransportHints th("compressed");
+    image_sub = _imageTransport.subscribe(strImage_sub_topic, 1, &BlobDetection::imageCB, this,image_transport::TransportHints("compressed")); 
+    // image_sub = _imageTransport.subscribeCamera(strImage_sub_topic, 10, &BlobDetection::imageCB, this, th);   
     ROS_INFO("Subcribed to the topic: %s", strImage_sub_topic.c_str());
 
-    image_pub = _imageTransport.advertise(strImage_pub_topic, 100);
+    image_pub = _imageTransport.advertise(strImage_pub_topic, 10);
     ROS_INFO("Published to the topic: %s", strImage_pub_topic.c_str());
 
-    mask_pub  = _imageTransport.advertise(strMask_pub_topic, 100);
+    mask_pub  = _imageTransport.advertise(strMask_pub_topic, 10);
     ROS_INFO("Published to the topic: %s",strMask_pub_topic.c_str());
 
-    transform_sub = nh_.subscribe(strTransform_sub_topic, 100, &BlobDetection::transformCB, this);
-    ROS_INFO("Subcribed to the topic: %s", strTransform_sub_topic.c_str());
+    // transform_sub = nh_.subscribe(strTransform_sub_topic, 10, &BlobDetection::transformCB, this);
+    // ROS_INFO("Subcribed to the topic: %s", strTransform_sub_topic.c_str());
 }
 
 BlobDetection::~BlobDetection()
@@ -195,12 +222,11 @@ void BlobDetection::transformCB(const geometry_msgs::TransformStamped &transform
     ROS_DEBUG("Exit transformCB");
 
 }
-void BlobDetection::imageCB(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::CameraInfoConstPtr& cam_info)
+// void BlobDetection::imageCB(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::CameraInfoConstPtr& cam_info)
+void BlobDetection::imageCB(const sensor_msgs::ImageConstPtr& msg)
 {
-    
     cv::Mat img, img_gray, imgMask, im_with_keypoints;
 	cv_bridge::CvImagePtr cvPtr;
-    // std::vector<cv::KeyPoint> keypoints;
  	
     try
 	{
@@ -212,10 +238,10 @@ void BlobDetection::imageCB(const sensor_msgs::ImageConstPtr& msg, const sensor_
 		ROS_ERROR("cv_bridge exception: %s", e.what());
 		return;
 	}
-    
-    cam_model.fromCameraInfo(cam_info);
+        
+    cam_model.fromCameraInfo(cinfo_->getCameraInfo());
     cameraMatrix = cam_model.intrinsicMatrix();
-
+   
     //copy value to cvMat
     cvPtr->image.copyTo(img);
     // ROS_INFO("img cols: %d", img.cols);
@@ -281,9 +307,6 @@ void BlobDetection::blobDetect(cv::Mat image,
     params.minInertiaRatio     = fMinInertiaRatio;
     params.maxInertiaRatio     = fMaxInertiaRatio;
 
-    // cout << "intrinsic matrix:" << endl;
-    // cout << cameraMatrix << endl;
-
     cv::blur(image,image,cv::Size(5,5));
     if (bImshow)
     {
@@ -317,7 +340,7 @@ void BlobDetection::blobDetect(cv::Mat image,
     cv::Ptr<cv::SimpleBlobDetector> detector = cv::SimpleBlobDetector::create(params);   
 
     cv::Mat imgMaskReserved;
-    imgMaskReserved = 255 - imgMask;
+    imgMaskReserved = imgMask;
 
     // Show the mask
     if (bImshow)
