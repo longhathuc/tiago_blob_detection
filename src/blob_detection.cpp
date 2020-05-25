@@ -203,9 +203,20 @@ void BlobDetection::configCallback(tiago_blob_detection::tiago_blob_detection_pa
     iHSV_max_H = config.iHSV_max_H;
     iHSV_max_S = config.iHSV_max_S;
     iHSV_max_V = config.iHSV_max_V;
-    ROS_INFO("Reconfigure Request: %d %d %d %d %d %d", 
+
+    fMinCircularity = config.fMinCircularity;
+    fMinConvexity   = config.fMinConvexity;
+    fMinThreshold   = config.fMinThreshold;
+    fMinArea        = config.fMinArea;
+    fMinInertiaRatio= config.fMinInertiaRatio;
+
+
+    ROS_INFO("Reconfigure Request HSV: %d %d %d %d %d %d" , 
             iHSV_min_H, iHSV_min_S, iHSV_min_V,
             iHSV_max_H, iHSV_max_S, iHSV_max_V);
+    ROS_INFO("Reconfigure Circularity: %6.4f, Convexity: %6.4f, Threshold: %6.4f, Area: %6.4f, Inertia: %6.4f", 
+            fMinCircularity, fMinConvexity, fMinThreshold, fMinArea, fMinInertiaRatio);
+    
 }
 
 void BlobDetection::transformCB(const geometry_msgs::TransformStamped &transformStamped)
@@ -364,7 +375,7 @@ void BlobDetection::blobDetect(cv::Mat image,
     cv::Ptr<cv::SimpleBlobDetector> detector = cv::SimpleBlobDetector::create(params);   
 
     cv::Mat imgMaskReserved;
-    imgMaskReserved = imgMask;
+    imgMaskReserved = 255 - imgMask;
 
     // Show the mask
     if (bImshow)
