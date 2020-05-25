@@ -12,9 +12,11 @@
     <!-- Parameters for HSV mask filter -->
     <param name="iHSV_min_H" value = "0"/>
     <param name="iHSV_min_S" value = "0"/>
-    <param name="iHSV_min_V" value = "122"/>
+    <!-- <param name="iHSV_min_V" value = "0"/> -->
+      <param name="iHSV_min_V" value = "80"/>
     <param name="iHSV_max_H" value = "255"/>
     <param name="iHSV_max_S" value = "255"/>
+    <!-- <param name="iHSV_max_V" value = "152"/> -->
     <param name="iHSV_max_V" value = "255"/>
 
     <!-- Parameters for blob properties-->

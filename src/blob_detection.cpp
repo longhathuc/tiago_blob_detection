@@ -25,6 +25,8 @@
 #include <urdf/model.h>
 #include <opencv2/features2d.hpp>
 #include <camera_info_manager/camera_info_manager.h>
+#include <dynamic_reconfigure/server.h>
+#include <tiago_blob_detection/tiago_blob_detection_paramsConfig.h>
 
 using namespace std;
 using namespace sensor_msgs;
@@ -47,6 +49,7 @@ class BlobDetection
                         bool        bBlur = false,
                         bool        bImshow = false);
         void publishHoleTF(std::vector<cv::KeyPoint> &keypoints);
+        void configCallback(tiago_blob_detection::tiago_blob_detection_paramsConfig &config, uint32_t level);
 
         ros::NodeHandle nh_;    
         
@@ -106,10 +109,13 @@ class BlobDetection
         string strCameraModel;
         bool   bSimulation;
 
-
+        dynamic_reconfigure::Server<tiago_blob_detection::tiago_blob_detection_paramsConfig> param_server;  
+        dynamic_reconfigure::Server<tiago_blob_detection::tiago_blob_detection_paramsConfig>::CallbackType call_type;
 };
 
-BlobDetection::BlobDetection(ros::NodeHandle nh_): _imageTransport(nh_), cinfo_(new camera_info_manager::CameraInfoManager(nh_))
+BlobDetection::BlobDetection(ros::NodeHandle nh_): _imageTransport(nh_), 
+                                                  cinfo_(new camera_info_manager::CameraInfoManager(nh_))
+
 {       
     //Parameters for topics 
     nh_.param<std::string>("strImage_sub_topic", strImage_sub_topic, "/rgb/image");
@@ -177,11 +183,29 @@ BlobDetection::BlobDetection(ros::NodeHandle nh_): _imageTransport(nh_), cinfo_(
 
     // transform_sub = nh_.subscribe(strTransform_sub_topic, 10, &BlobDetection::transformCB, this);
     // ROS_INFO("Subcribed to the topic: %s", strTransform_sub_topic.c_str());
+
+    // call_type = boost::bind(&configCallback, _1, _2);
+    // param_server.setCallback(call_type);
+
+    param_server.setCallback(boost::bind(&BlobDetection::configCallback, this, _1, _2));
 }
 
 BlobDetection::~BlobDetection()
 {
 	cv::destroyAllWindows();
+}
+
+void BlobDetection::configCallback(tiago_blob_detection::tiago_blob_detection_paramsConfig &config, uint32_t level) {
+   
+    iHSV_min_H = config.iHSV_min_H;
+    iHSV_min_S = config.iHSV_min_S;
+    iHSV_min_V = config.iHSV_min_V;
+    iHSV_max_H = config.iHSV_max_H;
+    iHSV_max_S = config.iHSV_max_S;
+    iHSV_max_V = config.iHSV_max_V;
+    ROS_INFO("Reconfigure Request: %d %d %d %d %d %d", 
+            iHSV_min_H, iHSV_min_S, iHSV_min_V,
+            iHSV_max_H, iHSV_max_S, iHSV_max_V);
 }
 
 void BlobDetection::transformCB(const geometry_msgs::TransformStamped &transformStamped)

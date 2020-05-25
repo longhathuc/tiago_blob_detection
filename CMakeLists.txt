@@ -20,6 +20,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   urdf
   camera_info_manager
+  dynamic_reconfigure
 )
 
 find_package(OpenCV COMPONENTS opencv_highgui opencv_features2d opencv_xfeatures2d opencv_calib3d)
@@ -28,7 +29,7 @@ if(NOT OPENCV_FOUND)
 	add_definitions(-DNO_CV_XFEATURES2D)
 endif()
 
-
+generate_dynamic_reconfigure_options(cfg/tiago_blob_detection_params.cfg)
 
 #list(APPEND OpenCV_LIBRARIES opencv_nonfree)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
@@ -48,6 +49,7 @@ include_directories(
 
 add_executable(blob_detection src/blob_detection.cpp)
 target_link_libraries(blob_detection ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+add_dependencies(blob_detection ${PROJECT_NAME}_gencfg)
 
 # install
 install (TARGETS blob_detection
@@ -59,4 +61,3 @@ install (TARGETS blob_detection
 install(DIRECTORY launch cfg
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
   USE_SOURCE_PERMISSIONS)
-
